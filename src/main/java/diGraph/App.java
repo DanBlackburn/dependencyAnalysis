@@ -29,6 +29,7 @@ public class App {
     private static final IOFileFilter WAR_FILE_FILTER = FileFilterUtils.suffixFileFilter("war");
     private static final IOFileFilter WAR_EAR_JAR_FILTER = FileFilterUtils.or(JAR_FILE_FILTER, EAR_FILE_FILTER, WAR_FILE_FILTER);
 
+
     public static void main(String[] args) {
 
         log.info("Args: {}", args);
@@ -39,6 +40,7 @@ public class App {
             argFiles.add(FileUtils.getFile(arg));
         }
 
+        ASMAnalyse.addIgnorePackage("java");
 
         processPaths(argFiles);
 
@@ -78,7 +80,7 @@ public class App {
                     e.printStackTrace();
                 }
             } else {
-                log.info("ignore: {}", file);
+                log.info("path ignore: {}", file);
             }
         }
     }
@@ -137,7 +139,7 @@ public class App {
                 log.info("inner zip: {}", entry.getName());
                 readInnerZipFile(zipFile, entry);
             } else {
-                log.info("ignored: {}", entry.getName());
+                log.info("zip entry ignored: {}", entry.getName());
             }
         }
     }
