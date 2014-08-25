@@ -10,10 +10,20 @@ public class AppTest
 {
 
     @Test
-    public void test() {
-
-        App.main(new String[] {"src/test/resources/axis-1.4.jar"});
-
+    public void testDirectories() {
+        App.main(new String[] {"src/test/resources/axis"});
     }
 
+    @Test
+    public void testSimpleJar() {
+        App.main(new String[] {"src/test/resources/axis-1.4.jar"});
+    }
+
+    @Test
+    public void testJarInJar() {
+        App.main(new String[] {"src/test/resources/axis-inside-axis.jar"});
+    }
+
+
 }
+

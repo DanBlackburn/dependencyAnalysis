@@ -6,79 +6,121 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.filefilter.FileFilterUtils;
 import org.apache.commons.io.filefilter.IOFileFilter;
+import org.apache.commons.io.filefilter.TrueFileFilter;
 import org.apache.commons.lang3.StringUtils;
 import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassVisitor;
-import org.objectweb.asm.FieldVisitor;
-import org.objectweb.asm.Opcodes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Enumeration;
+import java.util.*;
 
 /**
  * Hello world!
- *
  */
-public class App
-{
-
-    private static final Logger log = LoggerFactory.getLogger(App.class);
+public class App {
 
     public static final IOFileFilter JAR_FILE_FILTER = FileFilterUtils.suffixFileFilter("jar");
+    private static final Logger log = LoggerFactory.getLogger(App.class);
+    private static final IOFileFilter EAR_FILE_FILTER = FileFilterUtils.suffixFileFilter("ear");
+    private static final IOFileFilter WAR_FILE_FILTER = FileFilterUtils.suffixFileFilter("war");
+    private static final IOFileFilter WAR_EAR_JAR_FILTER = FileFilterUtils.or(JAR_FILE_FILTER, EAR_FILE_FILTER, WAR_FILE_FILTER);
 
-    static ClassVisitor cl = new ClassVisitor(Opcodes.ASM5) {
-        /**
-         * Called when a class is visited. This is the method called first
-         */
-        @Override
-        public void visit(int version, int access, String name,
-                          String signature, String superName, String[] interfaces) {
-            log.info("Visiting class: " + name);
-            log.info("Class Major Version: " + version);
-            log.info("Super class: " + superName);
-            super.visit(version, access, name, signature, superName, interfaces);
-        }
-
-        /**
-         * When a field is encountered
-         */
-        @Override
-        public FieldVisitor visitField(int access, String name,
-                                       String desc, String signature, Object value) {
-            log.info("Field: " + name + " " + desc + " value:" + value);
-            return super.visitField(access, name, desc, signature, value);
-        }
-
-    };
-
-    public static void main( String[] args )
-    {
+    public static void main(String[] args) {
 
         log.info("Args: {}", args);
-        
-        for(String arg : args) {
-            log.info("arg: {}", arg );
-            File file = FileUtils.getFile(arg);
-            // FIXME war, ear
-            if(file.canRead() && file.isFile() && JAR_FILE_FILTER.accept(file)) {
-                readZipFile(file);
+
+        List<File> argFiles = new ArrayList<>();
+        for (String arg : args) {
+            log.info("arg: {}", arg);
+            argFiles.add(FileUtils.getFile(arg));
+        }
+
+
+        processPaths(argFiles);
+
+    }
+
+    private static void processPaths(Collection<File> paths) {
+        log.info("processing paths: {}", paths);
+
+        List<File> files = new ArrayList<>();
+        List<File> dirs = new ArrayList<>();
+        for (File file : paths) {
+
+            if (file.isFile()) {
+                files.add(file);
+            } else if (file.isDirectory()) {
+                dirs.add(file);
             } else {
-                log.info("invalid: {}", arg);
+                log.info("unkown type: {}", file);
+            }
+        }
+
+        log.info("files: {}", files);
+        log.info("dirs: {}", dirs);
+
+        processZipFiles(files);
+        processDirectories(dirs);
+    }
+
+    public static void processZipFiles(List<File> files) {
+        for (File file : files) {
+            if (file.canRead() && file.isFile() && WAR_EAR_JAR_FILTER.accept(file)) {
+                try {
+                    log.info("read zip: {}", file);
+                    ZipFile zipFile = new ZipFile(file.getAbsolutePath());
+                    processZipFile(zipFile);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            } else {
+                log.info("ignore: {}", file);
+            }
+        }
+    }
+
+    public static void processDirectories(List<File> dirs) {
+        for (File dir : dirs) {
+            log.info("listing: {}", dir);
+            Collection<File> files = FileUtils.listFilesAndDirs(dir, WAR_EAR_JAR_FILTER, TrueFileFilter.INSTANCE);
+
+            // DirFilter in IO doesn't work on parent directory
+            Iterator<File> iter = files.iterator();
+            while (iter.hasNext()) {
+                File file = iter.next();
+                if (file.getPath().equals(dir.getPath())) {
+                    iter.remove();
+                }
             }
 
-            // FIXME directories
+            processPaths(files);
         }
 
     }
 
-    public static String readZipFile(File zip) {
-    try {
-        log.info("read zip: {}", zip);
-        ZipFile zipFile = new ZipFile(zip.getAbsolutePath());
+    public static void readInnerZipFile(ZipFile zipFile, ZipArchiveEntry innerZipFileEntry) {
+        File tempFile = null;
+        FileOutputStream tempOut = null;
+        ZipFile innerZipFile = null;
+        try {
+            tempFile = File.createTempFile("tempFile", "zip");
+            tempOut = new FileOutputStream(tempFile);
+            IOUtils.copy(
+                    zipFile.getInputStream(innerZipFileEntry),
+                    tempOut);
+            innerZipFile = new ZipFile(tempFile);
+            processZipFile(innerZipFile);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    private static void processZipFile(ZipFile zipFile) throws IOException {
         Enumeration<ZipArchiveEntry> entries = zipFile.getEntries();
         while (entries.hasMoreElements()) {
             ZipArchiveEntry entry = entries.nextElement();
@@ -87,15 +129,16 @@ public class App
                 log.info("----------------------");
                 log.info("analysing: {}", entry.getName());
                 ClassReader classReader = classReader = new ClassReader(inputStream);
-                    classReader.accept(cl, 0);
+                classReader.accept(ASMAnalyse.CLASSVISITOR, 0);
                 log.info("----------------------");
+            } else if (!entry.isDirectory() && (StringUtils.endsWith(entry.getName(), ".jar")
+                    || StringUtils.endsWith(entry.getName(), ".war")
+                    || StringUtils.endsWith(entry.getName(), ".ear"))) {
+                log.info("inner zip: {}", entry.getName());
+                readInnerZipFile(zipFile, entry);
             } else {
                 log.info("ignored: {}", entry.getName());
             }
         }
-    } catch (IOException e) {
-        e.printStackTrace();
     }
-    return null;
-}
 }
