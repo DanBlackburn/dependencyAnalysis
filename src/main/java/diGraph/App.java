@@ -1,5 +1,7 @@
 package diGraph;
 
+import diGraph.storage.GraphRepo;
+import diGraph.storage.GraphRepoNeo4J;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipFile;
 import org.apache.commons.io.FileUtils;
@@ -9,6 +11,7 @@ import org.apache.commons.io.filefilter.IOFileFilter;
 import org.apache.commons.io.filefilter.TrueFileFilter;
 import org.apache.commons.lang3.StringUtils;
 import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassVisitor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,14 +26,21 @@ import java.util.*;
  */
 public class App {
 
-    public static final IOFileFilter JAR_FILE_FILTER = FileFilterUtils.suffixFileFilter("jar");
     private static final Logger log = LoggerFactory.getLogger(App.class);
+
+    // FIXME remove filesystem/zip handling and make it non static
+    public static final IOFileFilter JAR_FILE_FILTER = FileFilterUtils.suffixFileFilter("jar");
     private static final IOFileFilter EAR_FILE_FILTER = FileFilterUtils.suffixFileFilter("ear");
     private static final IOFileFilter WAR_FILE_FILTER = FileFilterUtils.suffixFileFilter("war");
     private static final IOFileFilter WAR_EAR_JAR_FILTER = FileFilterUtils.or(JAR_FILE_FILTER, EAR_FILE_FILTER, WAR_FILE_FILTER);
+    private static GraphRepo graphRepo;
 
 
+    // FIXME Threading ffs...
+    // FIXME make the analyse configurable (only DI? or just do it on the view in neo4j?)
     public static void main(String[] args) {
+
+        graphRepo = new GraphRepoNeo4J("target/neo4j");
 
         log.info("Args: {}", args);
 
@@ -44,6 +54,7 @@ public class App {
 
         processPaths(argFiles);
 
+        graphRepo.close();
     }
 
     private static void processPaths(Collection<File> paths) {
@@ -96,6 +107,7 @@ public class App {
                 File file = iter.next();
                 if (file.getPath().equals(dir.getPath())) {
                     iter.remove();
+                    break;
                 }
             }
 
@@ -131,7 +143,9 @@ public class App {
                 log.info("----------------------");
                 log.info("analysing: {}", entry.getName());
                 ClassReader classReader = classReader = new ClassReader(inputStream);
-                classReader.accept(ASMAnalyse.CLASSVISITOR, 0);
+                ASMAnalyse.Analyser analyser = new ASMAnalyse.Analyser();
+                classReader.accept(analyser.getClassVisitor(), 0);
+                graphRepo.storeClassAnalyse(analyser.getClassName(), analyser.getRefs());
                 log.info("----------------------");
             } else if (!entry.isDirectory() && (StringUtils.endsWith(entry.getName(), ".jar")
                     || StringUtils.endsWith(entry.getName(), ".war")
