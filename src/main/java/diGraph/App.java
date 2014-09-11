@@ -1,24 +1,12 @@
 package diGraph;
 
-import diGraph.storage.GraphRepo;
+import diGraph.analyse.ASMAnalyse;
 import diGraph.storage.GraphRepoNeo4J;
-import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
-import org.apache.commons.compress.archivers.zip.ZipFile;
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.IOUtils;
-import org.apache.commons.io.filefilter.FileFilterUtils;
-import org.apache.commons.io.filefilter.IOFileFilter;
-import org.apache.commons.io.filefilter.TrueFileFilter;
-import org.apache.commons.lang3.StringUtils;
-import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassVisitor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.*;
 
 /**
@@ -28,19 +16,13 @@ public class App {
 
     private static final Logger log = LoggerFactory.getLogger(App.class);
 
-    // FIXME remove filesystem/zip handling and make it non static
-    public static final IOFileFilter JAR_FILE_FILTER = FileFilterUtils.suffixFileFilter("jar");
-    private static final IOFileFilter EAR_FILE_FILTER = FileFilterUtils.suffixFileFilter("ear");
-    private static final IOFileFilter WAR_FILE_FILTER = FileFilterUtils.suffixFileFilter("war");
-    private static final IOFileFilter WAR_EAR_JAR_FILTER = FileFilterUtils.or(JAR_FILE_FILTER, EAR_FILE_FILTER, WAR_FILE_FILTER);
-    private static GraphRepo graphRepo;
-
-
     // FIXME Threading ffs...
     // FIXME make the analyse configurable (only DI? or just do it on the view in neo4j?)
     public static void main(String[] args) {
 
-        graphRepo = new GraphRepoNeo4J("target/neo4j");
+        log.info("Initialising");
+        GraphRepoNeo4J graphRepo = new GraphRepoNeo4J("target/neo4j");
+        FileReader fileReader = new FileReader(graphRepo);
 
         log.info("Args: {}", args);
 
@@ -52,109 +34,10 @@ public class App {
 
         ASMAnalyse.addIgnorePackage("java");
 
-        processPaths(argFiles);
+        log.info("Process Files/Directories");
+        fileReader.processPaths(argFiles);
 
         graphRepo.close();
     }
 
-    private static void processPaths(Collection<File> paths) {
-        log.info("processing paths: {}", paths);
-
-        List<File> files = new ArrayList<>();
-        List<File> dirs = new ArrayList<>();
-        for (File file : paths) {
-
-            if (file.isFile()) {
-                files.add(file);
-            } else if (file.isDirectory()) {
-                dirs.add(file);
-            } else {
-                log.info("unkown type: {}", file);
-            }
-        }
-
-        log.info("files: {}", files);
-        log.info("dirs: {}", dirs);
-
-        processZipFiles(files);
-        processDirectories(dirs);
-    }
-
-    public static void processZipFiles(List<File> files) {
-        for (File file : files) {
-            if (file.canRead() && file.isFile() && WAR_EAR_JAR_FILTER.accept(file)) {
-                try {
-                    log.info("read zip: {}", file);
-                    ZipFile zipFile = new ZipFile(file.getAbsolutePath());
-                    processZipFile(zipFile);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            } else {
-                log.info("path ignore: {}", file);
-            }
-        }
-    }
-
-    public static void processDirectories(List<File> dirs) {
-        for (File dir : dirs) {
-            log.info("listing: {}", dir);
-            Collection<File> files = FileUtils.listFilesAndDirs(dir, WAR_EAR_JAR_FILTER, TrueFileFilter.INSTANCE);
-
-            // DirFilter in IO doesn't work on parent directory
-            Iterator<File> iter = files.iterator();
-            while (iter.hasNext()) {
-                File file = iter.next();
-                if (file.getPath().equals(dir.getPath())) {
-                    iter.remove();
-                    break;
-                }
-            }
-
-            processPaths(files);
-        }
-
-    }
-
-    public static void readInnerZipFile(ZipFile zipFile, ZipArchiveEntry innerZipFileEntry) {
-        File tempFile = null;
-        FileOutputStream tempOut = null;
-        ZipFile innerZipFile = null;
-        try {
-            tempFile = File.createTempFile("tempFile", "zip");
-            tempOut = new FileOutputStream(tempFile);
-            IOUtils.copy(
-                    zipFile.getInputStream(innerZipFileEntry),
-                    tempOut);
-            innerZipFile = new ZipFile(tempFile);
-            processZipFile(innerZipFile);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-    }
-
-    private static void processZipFile(ZipFile zipFile) throws IOException {
-        Enumeration<ZipArchiveEntry> entries = zipFile.getEntries();
-        while (entries.hasMoreElements()) {
-            ZipArchiveEntry entry = entries.nextElement();
-            if (!entry.isDirectory() && StringUtils.endsWith(entry.getName(), ".class")) {
-                InputStream inputStream = zipFile.getInputStream(entry);
-                log.info("----------------------");
-                log.info("analysing: {}", entry.getName());
-                ClassReader classReader = classReader = new ClassReader(inputStream);
-                ASMAnalyse.Analyser analyser = new ASMAnalyse.Analyser();
-                classReader.accept(analyser.getClassVisitor(), 0);
-                graphRepo.storeClassAnalyse(analyser.getClassName(), analyser.getRefs());
-                log.info("----------------------");
-            } else if (!entry.isDirectory() && (StringUtils.endsWith(entry.getName(), ".jar")
-                    || StringUtils.endsWith(entry.getName(), ".war")
-                    || StringUtils.endsWith(entry.getName(), ".ear"))) {
-                log.info("inner zip: {}", entry.getName());
-                readInnerZipFile(zipFile, entry);
-            } else {
-                log.info("zip entry ignored: {}", entry.getName());
-            }
-        }
-    }
 }

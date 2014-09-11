@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * Created by thargor on 8/26/14.
@@ -60,7 +61,7 @@ public class GraphRepoNeo4J implements GraphRepo {
 
     }
 
-    public void storeClassAnalyse(String clazz, List<String> references) {
+    public void storeClassAnalyse(String clazz, Set<String> references) {
         log.info("store analyse for {}", clazz);
 
         try ( Transaction tx = graphDb.beginTx() )
