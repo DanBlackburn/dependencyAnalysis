@@ -33,6 +33,7 @@ public class App {
         }
 
         ASMAnalyse.addIgnorePackage("java");
+        ASMAnalyse.addIgnorePackage("com");
 
         log.info("Process Files/Directories");
         fileReader.processPaths(argFiles);

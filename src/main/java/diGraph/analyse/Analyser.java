@@ -1,5 +1,7 @@
 package diGraph.analyse;
 
+import diGraph.model.ClassInfo;
+
 import java.io.IOException;
 import java.io.InputStream;
 

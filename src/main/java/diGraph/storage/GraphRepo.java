@@ -1,14 +1,13 @@
 package diGraph.storage;
 
-import java.util.List;
-import java.util.Set;
+import diGraph.model.ClassInfo;
 
 /**
  * Created by thargor on 8/26/14.
  */
 public interface GraphRepo {
 
-    public void storeClassAnalyse(String clazz, Set<String> references);
+    public void storeClassInfo(ClassInfo classInfo);
 
     public void close();
 }

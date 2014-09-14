@@ -6,6 +6,7 @@ import org.junit.Test;
 /**
  * Unit test for simple App.
  */
+// TODO create tests with assertions and a small testset
 public class AppTest
 {
 
@@ -23,7 +24,6 @@ public class AppTest
     public void testJarInJar() {
         App.main(new String[] {"src/test/resources/axis-inside-axis.jar"});
     }
-
 
 }
 

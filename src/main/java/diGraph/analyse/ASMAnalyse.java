@@ -1,5 +1,6 @@
 package diGraph.analyse;
 
+import diGraph.model.ClassInfo;
 import org.apache.commons.lang3.StringUtils;
 import org.objectweb.asm.*;
 import org.slf4j.Logger;
@@ -18,18 +19,10 @@ public class ASMAnalyse implements Analyser {
     private static final Logger log = LoggerFactory.getLogger(ASMAnalyse.class);
 
     private static Set<String> ignorePackages = new HashSet<>();
-
-    public ClassInfo analyse(InputStream inputStream, String artefactName) throws IOException {
-        ClassReader classReader = new ClassReader(inputStream);
-        ASMAnalyse.Analyser analyser = new Analyser(new ClassInfo(artefactName));
-        classReader.accept(analyser.getClassVisitor(), 0);
-
-        return analyser.getClassInfo();
-    }
-
+    private ClassInfo classInfo;
 
     public static String[] getIgnorePackages() {
-        return ignorePackages.toArray(new String[] {});
+        return ignorePackages.toArray(new String[]{});
     }
 
     public static void addIgnorePackage(String ignorePackage) {
@@ -38,8 +31,8 @@ public class ASMAnalyse implements Analyser {
     }
 
     private static String packageToByteCodeDesc(String packageName) {
-        if(!StringUtils.startsWith(packageName, "L")) {
-            packageName = "L"+packageName;
+        if (!StringUtils.startsWith(packageName, "L")) {
+            packageName = "L" + packageName;
         }
         packageName = StringUtils.replace(packageName, ".", "/");
         return packageName;
@@ -52,57 +45,60 @@ public class ASMAnalyse implements Analyser {
         return desc;
     }
 
-    public static class Analyser {
+    public ClassInfo analyse(InputStream inputStream, String container) throws IOException {
+        classInfo = new ClassInfo();
+        classInfo.setContainer(container);
 
-        private ClassInfo classInfo;
+        ClassReader classReader = new ClassReader(inputStream);
+        classReader.accept(getClassVisitor(), 0);
 
-        public Analyser(ClassInfo classInfo) {
-            this.classInfo = classInfo;
-        }
+        return classInfo;
+    }
 
-        public ClassInfo getClassInfo() {
-            return classInfo;
-        }
+    public ClassInfo getClassInfo() {
+        return classInfo;
+    }
 
-        public ClassVisitor getClassVisitor() {
+    public ClassVisitor getClassVisitor() {
 
-            return new ClassVisitor(Opcodes.ASM5) {
+        return new ClassVisitor(Opcodes.ASM5) {
 
-                /**
-                 * Called when a class is visited. This is the method called first
-                 */
-                @Override
-                public void visit(int version, int access, String name,
-                                  String signature, String superName, String[] interfaces) {
-                    log.info("Visiting class: " + name);
-                    // FIXME detect EJBs and CDI-Beans
-                    classInfo.setName(byteCodeDescToPackage(name));
-                    super.visit(version, access, name, signature, superName, interfaces);
-                }
+            /**
+             * Called when a class is visited. This is the method called first
+             */
+            @Override
+            public void visit(int version, int access, String name,
+                              String signature, String superName, String[] interfaces) {
+                log.info("Visiting class: " + name);
+                // FIXME detect EJBs and CDI-Beans
+                String fullClassname = byteCodeDescToPackage(name);
+                classInfo.setPackage(StringUtils.substringBeforeLast(fullClassname, "."));
+                classInfo.setClassName(StringUtils.substringAfterLast(fullClassname,"."));
+                super.visit(version, access, name, signature, superName, interfaces);
+            }
 
-                /**
-                 * When a field is encountered
-                 */
-                @Override
-                public FieldVisitor visitField(int access, String name,
-                                               String desc, String signature, Object value) {
-                    Type type = Type.getType(desc);
-                    if(Type.OBJECT == type.getSort()) {
-                        if(StringUtils.startsWithAny(desc, getIgnorePackages())) {
-                            log.info("ignored package: " + name + " " + desc);
-                        } else {
-                            log.info("Field: " + name + " " + desc);
-                            // FIXME detect DI Annotations
-                            classInfo.addRef(byteCodeDescToPackage(desc));
-                        }
+            /**
+             * When a field is encountered
+             */
+            @Override
+            public FieldVisitor visitField(int access, String name,
+                                           String desc, String signature, Object value) {
+                Type type = Type.getType(desc);
+                if (Type.OBJECT == type.getSort()) {
+                    if (StringUtils.startsWithAny(desc, getIgnorePackages())) {
+                        log.info("ignored package: " + name + " " + desc);
                     } else {
-                        log.info("primitive field: {}", name );
+                        log.info("Field: " + name + " " + desc);
+                        // FIXME detect DI Annotations
+                        classInfo.addRef(byteCodeDescToPackage(desc));
                     }
-                    return super.visitField(access, name, desc, signature, value);
+                } else {
+                    log.info("primitive field: {}", name);
                 }
+                return super.visitField(access, name, desc, signature, value);
+            }
 
-            };
-        }
+        };
     }
 
 

@@ -1,7 +1,7 @@
 package diGraph;
 
-import diGraph.analyse.ASMAnalyse;
-import diGraph.analyse.ClassInfo;
+import diGraph.analyse.AnalyserFactory;
+import diGraph.model.ClassInfo;
 import diGraph.storage.GraphRepo;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipFile;
@@ -11,7 +11,6 @@ import org.apache.commons.io.filefilter.FileFilterUtils;
 import org.apache.commons.io.filefilter.IOFileFilter;
 import org.apache.commons.io.filefilter.TrueFileFilter;
 import org.apache.commons.lang3.StringUtils;
-import org.objectweb.asm.ClassReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -112,7 +111,7 @@ public class FileReader {
 
     }
 
-    private void processZipFile(ZipFile zipFile, String artefactName) throws IOException {
+    private void processZipFile(ZipFile zipFile, String container) throws IOException {
         Enumeration<ZipArchiveEntry> entries = zipFile.getEntries();
         while (entries.hasMoreElements()) {
             ZipArchiveEntry entry = entries.nextElement();
@@ -121,9 +120,8 @@ public class FileReader {
                 log.info("----------------------");
                 log.info("analysing: {}", entry.getName());
 
-
-                ClassInfo classInfo = new ASMAnalyse().analyse(inputStream, artefactName);
-                graphRepo.storeClassAnalyse(classInfo.getName(), classInfo.getRefs());
+                ClassInfo classInfo = AnalyserFactory.create().analyse(inputStream, container);
+                graphRepo.storeClassInfo(classInfo);
                 log.info("----------------------");
             } else if (!entry.isDirectory() && (StringUtils.endsWith(entry.getName(), ".jar")
                     || StringUtils.endsWith(entry.getName(), ".war")

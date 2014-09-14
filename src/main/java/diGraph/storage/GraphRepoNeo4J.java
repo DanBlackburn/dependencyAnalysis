@@ -1,14 +1,13 @@
 package diGraph.storage;
 
+import diGraph.model.ClassInfo;
+import org.apache.commons.lang3.StringUtils;
 import org.neo4j.graphdb.*;
 import org.neo4j.graphdb.factory.GraphDatabaseFactory;
 import org.neo4j.graphdb.schema.IndexDefinition;
 import org.neo4j.graphdb.schema.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.List;
-import java.util.Set;
 
 /**
  * Created by thargor on 8/26/14.
@@ -19,6 +18,7 @@ public class GraphRepoNeo4J implements GraphRepo {
 
     public static final Label LABEL_CLASS = DynamicLabel.label("class");
     public static final String PROPERTY_NAME = "name";
+    public static final String PROPERTY_PACKAGE = "package";
     GraphDatabaseService graphDb;
 
     private static enum RelTypes implements RelationshipType
@@ -61,20 +61,21 @@ public class GraphRepoNeo4J implements GraphRepo {
 
     }
 
-    public void storeClassAnalyse(String clazz, Set<String> references) {
-        log.info("store analyse for {}", clazz);
+    public void storeClassInfo(ClassInfo classInfo) {
+        log.info("store analyse for {}", classInfo.getName());
 
         try ( Transaction tx = graphDb.beginTx() )
         {
             Iterable<Relationship> classNodeRelationships = null;
-            Node classNode = getNodeByName(clazz);
+            // FIXME we need to identity a class with it's package and container ... also subcontainer?
+            Node classNode = getNodeByName(classInfo.getName());
             if(classNode == null) {
-                classNode = createNode(clazz);
+                classNode = createNode(classInfo);
             } else {
                 classNodeRelationships = classNode.getRelationships(RelTypes.KNOWS, Direction.OUTGOING);
             }
 
-            for(String ref : references) {
+            for(String ref : classInfo.getRefs()) {
 
                 // do we know you?
                 Node refNode = getNodeByName(ref);
@@ -82,7 +83,10 @@ public class GraphRepoNeo4J implements GraphRepo {
 
                 // nope, lets create you
                 if(refNode == null) {
-                    refNode = createNode(ref);
+                    ClassInfo refClassInfo = new ClassInfo();
+                    refClassInfo.setClassName(StringUtils.substringAfterLast(ref, "."));
+                    refClassInfo.setPackage(StringUtils.substringBeforeLast(ref, "."));
+                    refNode = createNode(refClassInfo);
                 } else {
                     if(classNodeRelationships != null) {
                         for(Relationship rel : classNodeRelationships) {
@@ -106,10 +110,11 @@ public class GraphRepoNeo4J implements GraphRepo {
         }
     }
 
-    private Node createNode(String name) {
+    private Node createNode(ClassInfo classInfo) {
         Node node = graphDb.createNode();
-        log.info("create node {} {}", name, node);
-        node.setProperty(PROPERTY_NAME, name);
+        log.info("create node {} {}", classInfo, node);
+        node.setProperty(PROPERTY_NAME, classInfo.getName());
+        node.setProperty(PROPERTY_PACKAGE, classInfo.getPackage());
         node.addLabel(LABEL_CLASS);
         return node;
     }
