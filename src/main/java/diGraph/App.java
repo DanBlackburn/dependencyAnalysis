@@ -1,6 +1,9 @@
 package diGraph;
 
 import diGraph.analyse.ASMAnalyse;
+import diGraph.analyse.Analyser;
+import diGraph.analyse.AnalyserConfig;
+import diGraph.analyse.AnalyserFactory;
 import diGraph.storage.GraphRepoNeo4J;
 import org.apache.commons.io.FileUtils;
 import org.slf4j.Logger;
@@ -32,8 +35,11 @@ public class App {
             argFiles.add(FileUtils.getFile(arg));
         }
 
-        ASMAnalyse.addIgnorePackage("java");
-        ASMAnalyse.addIgnorePackage("com");
+        AnalyserConfig analyserConfig = new AnalyserConfig();
+        analyserConfig.addIgnorePackage("java");
+
+        AnalyserFactory.setConfig(analyserConfig);
+        AnalyserFactory.setType(AnalyserFactory.Type.ASM);
 
         log.info("Process Files/Directories");
         fileReader.processPaths(argFiles);
