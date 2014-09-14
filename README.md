@@ -10,5 +10,6 @@ The goal of this project is to build a tool to analyse java source|bytecode and 
 
 ## What it can't do (yet)
 - There is no consistent data model, classes are stored/loaded only by their name. There should be nodes for container and packages.
+- Use concurrency (fork/join? akka?)
 - Analyse dependency injection (find implementation for interface which are used in classes)
 - Handle inner classes correct

@@ -9,7 +9,7 @@ public class ClassInfo {
 
     // Directory or compressed archive this class is part of
     private String container;
-    // TODO packages are entities to
+    // TODO packages are entities to, we need a constent datamodel
     // package of the class
     private String packageName;
     // className of the class
